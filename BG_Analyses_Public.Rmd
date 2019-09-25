@@ -1,0 +1,798 @@
+---
+title: Infants rationally decide when and how to deploy effort - Analyses
+Project: NHB article "Analyses in manuscript: Infants rationally decide when and how to deploy effort"
+Authors: Kelsey Lucca, Rachel O. Horton, Jessica A. Sommerville
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, warning = FALSE,
+                      tidy = TRUE)
+```
+
+```{r libraries}
+#Load libraries
+library(tidyverse)
+library(lme4)
+library(nlme)
+library(lmtest)
+library(lmerTest)
+library(lsr)
+library(afex)
+```
+
+```{r general-settings}
+
+#define gray color palette & set base font size
+cbbPalette <- c("grey77", "grey54", "grey28")
+theme_set(theme_bw(base_size = 20))
+```
+
+
+```{r prepare-data}
+#Prepare data for analysis
+
+#Read in data file
+BG <- read.csv("https://raw.githubusercontent.com/klucca/Lucca_et_al_Effort_2019/master/BG.csv")
+
+#Set data types
+as.factor(BG$TrialNumber_AsFactor)->BG$TrialNumber_AsFactor
+
+#Dummy code variables for cross-condition comparisons
+BG$Condition <- factor(BG$Condition, levels=c("Easy","Hard", "Impossible")) #Easy is baseline
+BG$Condition_HardBase <- factor(BG$Condition_HardBase, levels=c("Hard","Easy", "Impossible")) #Hard is baseline
+BG$Condition_ImpossibleBase <- factor(BG$Condition_ImpossibleBase, levels=c("Impossible","Hard", "Easy")) #Impossible is baseline
+
+
+#Create additional dataframes for analysis
+
+# Subset of data to get one row per individual in trial 1
+BG %>% filter(TrialNumber=="1")-> BG_Trial1
+
+
+# Subset time trying data to calculate effect sizes
+timetrying_subset <- BG %>% select(SubjNum,TrialNumber,TimeTrying_sqrt,Condition)
+timetrying_wide <- spread(data = timetrying_subset, key = TrialNumber, value = TimeTrying_sqrt) 
+timetrying_wide<- rename(timetrying_wide, "one" = "1")
+timetrying_wide<- rename(timetrying_wide, "two" = "2")
+timetrying_wide<- rename(timetrying_wide, "three" = "3")
+timetrying_wide_easy <- subset(timetrying_wide, Condition=="Easy")
+timetrying_wide_hard <- subset(timetrying_wide, Condition=="Hard")
+timetrying_wide_impossible <- subset(timetrying_wide, Condition=="Impossible")
+
+```
+
+
+######################################################
+#   Section 1 Time Trying Analyses   #
+###################################################### 
+
+Figure 2. Infants’ trying behavior, time spent engaging with task,  
+across conditions and trials. (left, n = 288 trials)  
+
+```{r Time-Trying-plot, echo = FALSE}
+#data viz in boxplot
+ggplot(BG, mapping = aes(x = TrialNumber_AsFactor, y =  TimeTrying, fill=TrialNumber_AsFactor))+
+  geom_boxplot(alpha=.6,outlier.shape = NA) + geom_jitter(alpha=.2,width=.1)+
+  scale_fill_manual(values=cbbPalette)+ylab("Time spent trying (s)") + xlab("Trial Number")+
+  facet_wrap(~Condition) +theme_bw()+ theme(legend.position="None")+
+  theme(strip.text = element_text(size = 15)) + theme(axis.text.x =element_text(size = 15))+
+  theme(axis.text.y =element_text(size = 15)) + theme(axis.title.y =element_text(size = 15))+
+  theme(axis.title.x =element_text(size = 15))
+```
+
+
+```{r time-trying-table, results = 'asis', echo = FALSE}
+#descriptive stats time trying
+MeanTryingTime <- BG%>%
+  filter(!is.na(TimeTrying)) %>%
+  group_by(Condition,TrialNumber)%>%
+  summarise(n=n(),
+            mean_tryingtime = mean(TimeTrying,na.rm=TRUE),
+            sd = sd(TimeTrying,na.rm=TRUE),
+            se = sd/sqrt(n))
+ knitr::kable(MeanTryingTime)
+```
+
+Time trying linear mixed effect model
+```{r time-trying-analysis-part1}
+#analyze time trying data, generate 95% CI, and run model comparisons, with easy as baseline
+lmer(TimeTrying_sqrt~TrialNumber*Condition+(1|SubjNum),data=BG)->m1
+summary(m1)
+confint(m1)
+lmer(TimeTrying_sqrt~(1|SubjNum),data=BG)->m0
+anova(m0,m1)
+
+#analyze time trying data with hard as baseline, generate 95% CI
+lmer(TimeTrying_sqrt~TrialNumber*Condition_HardBase+(1|SubjNum),data=BG)->m1
+summary(m1)
+confint(m1)
+lmer(TimeTrying_sqrt~(1|SubjNum),data=BG)->m0
+anova(m0,m1)
+```
+
+
+Linear mixed effect model within conditions for time trying  
+analyzing effect of trial number within each condition
+```{r time-trying-analysis-part2}
+
+#impossible condition linear mixed effect model for time trying
+lmer(TimeTrying_sqrt~TrialNumber+(1|SubjNum),
+     data=BG[BG[,"Condition"]=="Impossible",])->TimeTryingImpossibleCondModel
+summary(TimeTryingImpossibleCondModel)
+confint(TimeTryingImpossibleCondModel)
+
+#easy condition linear mixed effect model for time trying
+lmer(TimeTrying_sqrt~TrialNumber+(1|SubjNum),
+     data=BG[BG[,"Condition"]=="Easy",])->TimeTryingEasyCondModel
+summary(TimeTryingEasyCondModel)
+confint(TimeTryingEasyCondModel)
+
+#hard condition linear mixed effect model for time trying
+lmer(TimeTrying_sqrt~TrialNumber+(1|SubjNum),
+     data=BG[BG[,"Condition"]=="Hard",])->TimeTryingHardCondModel
+summary(TimeTryingHardCondModel)
+confint(TimeTryingHardCondModel)
+
+
+cohensD(timetrying_wide_easy$one, timetrying_wide_easy$three,method="paired")
+cohensD(timetrying_wide_impossible$one, timetrying_wide_impossible$three,method="paired")
+cohensD(timetrying_wide_hard$one, timetrying_wide_hard$three,method="paired")
+```
+
+
+######################################################
+#   Section 2 Force Analyses   #
+###################################################### 
+Figure 2. Infants’ trying behavior, maximum pulling force on the rope in pounds  
+per square inch, across conditions and trials(center, n = 213 trials).  
+
+```{r force-plot, echo = FALSE}
+#data viz in boxplot
+ggplot(BG, mapping = aes(x = TrialNumber_AsFactor, y =  MaxPSI,fill=TrialNumber_AsFactor))+
+  geom_boxplot(alpha=.6,outlier.shape = NA)+ geom_jitter(alpha=.2,width=.1)+
+  scale_fill_manual(values=cbbPalette)+ylab("Average Max Trying Force (psi)")+
+  xlab("Trial Number")+facet_wrap(~Condition) +theme_bw()+ theme(legend.position="None")+
+  theme(strip.text = element_text(size = 15))+theme(axis.text.x =element_text(size = 15))+
+  theme(axis.text.y =element_text(size = 15))+theme(axis.title.y =element_text(size = 15))+
+  theme(axis.title.x =element_text(size = 15))
+```
+
+```{r force-table, results = 'asis', echo = FALSE}
+#descriptive stats max lb
+MeanMaxLb  <- BG%>%
+  group_by(Condition,TrialNumber)%>%
+  filter(!is.na(MaxPSI)) %>%
+  summarise(n=n(),
+            mean_max_lb = mean(MaxPSI,na.rm=TRUE),
+            sd = sd(MaxPSI,na.rm=TRUE),
+            se = sd/sqrt(n))
+
+ knitr::kable(MeanMaxLb)
+```
+
+Pulling force linear mixed effect model  
+```{r force-analysis-part1}
+#analyze max lb, compute CIs, and compare reduced and full models
+lmer(MaxPSI_sqrt~TrialNumber*Condition+(1|SubjNum),data=BG)->MaxLbModel
+summary(MaxLbModel)
+confint(MaxLbModel)
+lmer(MaxPSI_sqrt~(1|SubjNum),data=BG)->m0
+anova(m0,MaxLbModel)
+```
+
+Linear mixed effect models within conditions for pulling force  
+analyzing effect of trial number within each condition
+```{r force-analysis-part2}
+
+#Impossible condition linear mixed model for pulling force
+lmer(MaxPSI_sqrt~TrialNumber+(1|SubjNum),
+     data=BG[BG[,"Condition"]=="Impossible",])->ImpossibleMaxLbModel
+summary(ImpossibleMaxLbModel)
+confint(ImpossibleMaxLbModel)
+
+#Easy condition linear mixed model for pulling force
+lmer(MaxPSI_sqrt~TrialNumber+(1|SubjNum),
+     data=BG[BG[,"Condition"]=="Easy",])->EasyMaxLbModel
+summary(EasyMaxLbModel)
+confint(EasyMaxLbModel)
+
+#Hard condition linear mixed model for pulling force
+lmer(MaxPSI_sqrt~TrialNumber+(1|SubjNum),
+     data=BG[BG[,"Condition"]=="Hard",])->HardMaxLbModel
+summary(HardMaxLbModel)
+confint(HardMaxLbModel)
+```
+
+
+######################################################
+#   Section 3 Help Seeking Analyses   #
+###################################################### 
+
+
+Figure 2. Frequency of help seeking behaviors,  
+across conditions and trials(right, n = 96 infants).  
+
+```{r helping-seeking-plot, echo = FALSE}
+#visualize
+BG_Trial1 %>% ggplot(aes(x=Condition,y= HelpSeekingNum_exp_avg))+geom_boxplot(alpha=.6,outlier.shape=NA)+
+  geom_jitter(alpha=.2,width=.1)+ylab("mean requests for help")+
+  theme(axis.text.x = element_text(size = 24, angle = 45, hjust = 1, vjust = 1),
+        axis.title.x = element_text(size=24),axis.text.y = element_text(size=24),
+        axis.title.y=element_text(size=24))+ theme(legend.position = "none") +xlab("")+theme_bw()+
+  theme(legend.position="None")+theme(strip.text = element_text(size = 15))+
+  theme(axis.text.x =element_text(size = 15))+theme(axis.text.y =element_text(size = 15))+
+  theme(axis.title.y =element_text(size = 15))+theme(axis.title.x =element_text(size = 15))+
+  scale_fill_manual(values=cbbPalette)
+```
+
+```{r helping-seeking-table,  results = 'asis', echo = FALSE}
+#descriptive stats help seeking
+MeanHelpSeeking  <- BG_Trial1%>%
+  group_by(Condition)%>%
+  filter(!is.na(HelpSeekingNum_exp_avg)) %>%
+  summarise(n=n(),
+            mean_numreachespoints= mean(HelpSeekingNum_exp_avg,na.rm=TRUE),
+            sd = sd(HelpSeekingNum_exp_avg,na.rm=TRUE),
+            se = sd/sqrt(n))
+ knitr::kable(MeanHelpSeeking)
+```
+
+Help seeking generalized linear mixed effect model
+```{r helping-seeking-analysis-part1}
+#analyze help seeking behavior to find no condition*trial interaction
+summary(glmer(HelpSeekingNum_exp~TrialNumber*Condition+(1|SubjNum),
+              family="poisson",data=BG,
+              glmerControl(optimizer="bobyqa",optCtrl = list(maxfun =100000))))
+```
+
+```{r helping-seeking-analysis-part2}
+#Since trial number did not impact help seeking behaviors, remove this predictor to improve model parsimony and analyze help seeking behaviors collapsed across all three trials, compute CIs, and compare reduced and full models,
+#Run help seeking analysis with easy as baseline
+lm(HelpSeekingNum_exp_avg~Condition,data=BG_Trial1)->HelpSeekingModel
+summary(HelpSeekingModel)
+confint(HelpSeekingModel)
+lm(HelpSeekingNum_exp_avg~1,data=BG_Trial1)->mnull
+AIC(mnull)-AIC(HelpSeekingModel)
+anova(mnull,HelpSeekingModel,test= "Chisq")
+
+```
+
+Help seeking in test vs recovery
+```{r helping-seeking-analysis-part3}
+
+#rate of help seeking (as opposed to number of help requests) was used in order to compare data across test and recovery trials.
+
+#paired sample t-test, help seeking in test vs recovery, easy cond: 
+subset(BG_Trial1, Condition == "Easy") -> RecoveryAnalyses_Easy
+
+t.test(RecoveryAnalyses_Easy$HelpSeekingRate_Recovery, 
+       RecoveryAnalyses_Easy$HelpSeekingRate_exp_avg,paired=TRUE)
+
+cohensD(RecoveryAnalyses_Easy$HelpSeekingRate_Recovery, 
+        RecoveryAnalyses_Easy$HelpSeekingRate_exp_avg,method="paired")
+
+#paired sample t-test, help seeking in test vs recovery, hard cond: 
+subset(BG_Trial1, Condition == "Hard") -> RecoveryAnalyses_Hard
+t.test(RecoveryAnalyses_Hard$HelpSeekingRate_Recovery, 
+       RecoveryAnalyses_Hard$HelpSeekingRate_exp_avg,paired=TRUE)
+
+cohensD(RecoveryAnalyses_Hard$HelpSeekingRate_Recovery, 
+        RecoveryAnalyses_Hard$HelpSeekingRate_exp_avg,method="paired")
+
+#paired sample t-test, help seeking in test vs recovery, impossible cond: 
+subset(BG_Trial1, Condition == "Impossible") -> RecoveryAnalyses_Impossible
+
+t.test(RecoveryAnalyses_Impossible$HelpSeekingRate_Recovery, 
+       RecoveryAnalyses_Impossible$HelpSeekingRate_exp_avg,paired=TRUE)
+
+cohensD(RecoveryAnalyses_Impossible$HelpSeekingRate_Recovery, 
+        RecoveryAnalyses_Impossible$HelpSeekingRate_exp_avg,method="paired")
+```
+
+
+######################################################
+#   Section 4: Affect Analyses   #
+###################################################### 
+
+## Section 4.1 Negative Affect Analyses
+Figure 3. Infants’ behavior across conditions and trials,  
+negative affect (center, n = 218 trials).  
+
+```{r affect-negative-plot, , echo = FALSE}
+#visualize negative affect in box plot
+ggplot(BG, mapping = aes(x = TrialNumber_AsFactor, y = TotalNegFrames/NumAffectFrames,
+                         fill=TrialNumber_AsFactor)) +
+  geom_boxplot(alpha=.6,outlier.shape=NA)+geom_jitter(alpha=.2,width=.1)+
+  scale_fill_manual(values=cbbPalette)+ylab("Proportion Negative Affect")+
+  xlab("Trial Number")+facet_wrap(~Condition) +theme_bw()+ theme(legend.position="None")+
+  theme(strip.text = element_text(size = 15))+theme(axis.text.x =element_text(size = 15))+
+  theme(axis.text.y =element_text(size = 15))+theme(axis.title.y =element_text(size = 15))+
+  theme(axis.title.x =element_text(size = 15))
+```
+
+
+```{r affect-negative-table,  results = 'asis', , echo = FALSE}
+#descriptive stats neg affect
+MeanNegAffect  <- BG%>%
+  group_by(Condition,TrialNumber)%>%
+  filter(!is.na(NumAffectFrames)) %>%
+  summarise(n=n(),
+            mean_negaffect= mean(TotalNegFrames/NumAffectFrames,na.rm=TRUE),
+            sd = sd(TotalNegFrames/NumAffectFrames,na.rm=TRUE),
+            se = sd/sqrt(n))
+ knitr::kable(MeanNegAffect)
+```
+
+
+```{r affect-negative-analysis_part1}
+#analyze negative affect, compute CIs, and compare models, with hard as baseline
+glmer(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~Condition_HardBase*TrialNumber+
+        (1|SubjNum),data=BG,family="binomial",
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->NegAffectModel
+
+summary(NegAffectModel)
+
+confint(NegAffectModel)
+
+glmer(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~(1|SubjNum),data=BG,family="binomial",
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->m0
+
+anova(m0,NegAffectModel)
+
+#analyze negative affect, compute CIs, and compare models, with easy as baseline
+glmer(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~Condition*TrialNumber+
+        (1|SubjNum),data=BG,family="binomial",
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->NegAffectModel
+
+summary(NegAffectModel)
+
+confint(NegAffectModel)
+
+glmer(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~(1|SubjNum),
+      data=BG,family="binomial",glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->m0
+
+anova(m0,NegAffectModel)
+```
+
+```{r affect-negative-analysis_part2}
+#test for simple ME of trial number within each condition on negative affect & compute CIs, with hard as baseline
+
+#Impossible condition
+glmer(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~TrialNumber+(1|SubjNum),
+      family="binomial",data=BG[BG[,"Condition_HardBase"]=="Impossible",],
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->ImpossibleNegAffectModel
+summary(ImpossibleNegAffectModel)
+confint(ImpossibleNegAffectModel)
+
+#Hard condition
+glmer(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~TrialNumber+(1|SubjNum),
+      family="binomial",data=BG[BG[,"Condition_HardBase"]=="Hard",],
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->HardNegAffectModel
+summary(HardNegAffectModel)
+confint(HardNegAffectModel)
+
+#Easy condition
+glmer(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~TrialNumber+(1|SubjNum),
+      family="binomial",data=BG[BG[,"Condition_HardBase"]=="Easy",],
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->EasyNegAffectModel
+summary(EasyNegAffectModel)
+confint(EasyNegAffectModel)
+
+```
+
+## Section 4.2 Positive Affect Analyses
+Figure 3. Infants’ behavior across conditions and trials,  
+frequency of positive affect (left, n = 218 trials)  
+
+```{r affect-positive-plot, echo = FALSE}
+#data viz in boxplot
+ggplot(BG, mapping = aes(x = TrialNumber_AsFactor, y = TotalPosFrames/NumAffectFrames,
+                         fill=TrialNumber_AsFactor)) +
+  geom_boxplot(alpha=.6,outlier.shape=NA)+geom_jitter(alpha=.2,width=.1)+
+  scale_fill_manual(values=cbbPalette)+ylab("Proportion Positive Affect")+
+  xlab("Trial Number")+facet_wrap(~Condition) +theme_bw()+ theme(legend.position="None")+
+  theme(strip.text = element_text(size = 15))+theme(axis.text.x =element_text(size = 15))+
+  theme(axis.text.y =element_text(size = 15))+theme(axis.title.y =element_text(size = 15))+
+  theme(axis.title.x =element_text(size = 15))
+```
+
+
+```{r affect-positive-table,  results = 'asis', echo = FALSE}
+#descriptive stats pos affect
+MeanPosAffect  <- BG%>%
+  group_by(Condition,TrialNumber)%>%
+  filter(!is.na(NumAffectFrames)) %>%
+  summarise(n=n(),
+            mean_posaffect= mean(TotalPosFrames/NumAffectFrames,na.rm=TRUE),
+            sd = sd(TotalPosFrames/NumAffectFrames,na.rm=TRUE),
+            se = sd/sqrt(n))
+knitr::kable(MeanPosAffect)
+```
+
+
+```{r affect-positive-analysis-part1}
+#analyze positive affect, generate CIs, and run model comparisons, with hard as baseline
+glmer(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~Condition_HardBase*TrialNumber+
+        (1|SubjNum),data=BG,family="binomial",
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->pos_affect_model
+
+summary(pos_affect_model)
+
+confint(pos_affect_model)
+
+glmer(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~(1|SubjNum),
+      data=BG,family="binomial",glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->m0
+
+anova(m0,pos_affect_model)
+
+#analyze positive affect, generate CIs, and run model comparisons, with easy as baseline
+glmer(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~Condition*TrialNumber+
+        (1|SubjNum),data=BG,family="binomial",
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->pos_affect_model
+
+summary(pos_affect_model)
+
+confint(pos_affect_model)
+
+glmer(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~(1|SubjNum),
+      data=BG,family="binomial",glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->m0
+
+anova(m0,pos_affect_model)
+
+```
+
+```{r affect-postive-analysis-part2}
+#analyze simple ME of trial num on positive affect and compute CIs
+
+#impossible
+glmer(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~TrialNumber+(1|SubjNum),
+      family="binomial",data=BG[BG[,"Condition"]=="Impossible",],
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->ImpossiblePosAffectModel
+summary(ImpossiblePosAffectModel)
+confint(ImpossiblePosAffectModel)
+
+#Hard
+glmer(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~TrialNumber+(1|SubjNum),
+      family="binomial",data=BG[BG[,"Condition"]=="Hard",],
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->HardPosAffectModel
+summary(HardPosAffectModel)
+confint(HardPosAffectModel)
+
+#Easy
+glmer(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~TrialNumber+(1|SubjNum),
+      family="binomial",data=BG[BG[,"Condition"]=="Easy",],
+      glmerControl(optimizer="bobyqa", optCtrl = list(maxfun = 100000)))->EasyPosAffectModel
+summary(EasyPosAffectModel)
+confint(EasyPosAffectModel)
+```
+
+
+######################################################
+#   Section 5 Recovery Trial Support Analyses   #
+###################################################### 
+
+Figure 3. Infants’ behavior across conditions and trials, number of hints  
+provided during the recovery trial (right, n = 94 infants).  
+
+```{r recovery-plot, echo = FALSE}
+#data viz in boxplot
+ggplot(BG_Trial1, mapping = aes(x = Condition, y = NumHints_Recovery )) +
+  geom_boxplot(alpha=.6,outlier.shape=NA)+geom_jitter(alpha=.2,width=.1)+
+  scale_fill_manual(values=cbbPalette)+ylab("Average Support Provided")+
+  xlab("Condition")+theme_bw()+ theme(legend.position="None")+
+  theme(axis.text.x =element_text(size = 15))+theme(axis.text.y =element_text(size = 15))+
+  theme(axis.title.y =element_text(size = 15))+theme(axis.title.x =element_text(size = 15))
+```
+
+
+```{r recovery-table, results = 'asis', echo = FALSE}
+#descriptive stats recovery
+MeanHints  <- BG_Trial1%>%
+  group_by(Condition)%>%
+  filter(!is.na(NumHints_Recovery)) %>%
+  summarise(n=n(),
+            mean_numhints= mean(NumHints_Recovery,na.rm=TRUE),
+            sd = sd(NumHints_Recovery,na.rm=TRUE),
+            se = sd/sqrt(n))
+ knitr::kable(MeanHints)
+```
+
+
+```{r recovery-analysis}
+
+#analyze hint data, compute CIs, and run model comparisons w/ hard as baseline condition
+BG_Trial1$Condition <- factor(BG_Trial1$Condition, levels=c("Hard","Impossible", "Easy"))
+
+glm(NumHints_Recovery~Condition,data=BG_Trial1,family="poisson")->HintModel
+
+summary(HintModel)
+
+confint(HintModel)
+
+glm(NumHints_Recovery~TrialNumber,data=BG_Trial1,family="poisson")->m0
+
+anova(m0,HintModel,test="Chisq")
+
+
+#analyze hint data, compute CIs, and run model comparisons w/ easy as baseline condition
+BG_Trial1$Condition <- factor(BG_Trial1$Condition, levels=c("Easy","Hard", "Impossible"))
+
+glm(NumHints_Recovery~Condition,data=BG_Trial1,family="poisson")->HintModel
+
+summary(HintModel)
+
+confint(HintModel)
+
+glm(NumHints_Recovery~TrialNumber,data=BG_Trial1,family="poisson")->m0
+
+anova(m0,HintModel,test="Chisq")
+```
+
+
+
+######################################################
+#   Section 6 correlations across DVs   #
+###################################################### 
+
+
+```{r correlations across dvs}
+
+#neg affect x time trying
+
+#visualize
+ggplot(BG,mapping =aes(x=TotalNegFrames/NumAffectFrames,y=TimeTrying))+geom_point()+geom_smooth(method="lm",se=F,color="gray",alpha=.7)+ylab("Time Trying (s)")+xlab("Proportion Negative Affect")
+
+#create new neg affect variable to correlate with time trying
+mutate(BG, PropNegAffect = TotalNegFrames/NumAffectFrames)->BG
+cor.test(BG$PropNegAffect,BG$TimeTrying)
+
+#pos affect x time trying
+
+#visualize
+ggplot(BG,mapping =aes(x=TotalPosFrames/NumAffectFrames,y=TimeTrying))+geom_point()+geom_smooth(method="lm",se=F,color="gray",alpha=.7)+ylab("Time Trying (s)")+xlab("Proportion Positive Affect")
+
+#create new pos affect variable to correlate with time trying
+mutate(BG, PropPosAffect = TotalPosFrames/NumAffectFrames)->BG
+cor.test(BG$PropPosAffect,BG$TimeTrying)
+
+#help seeking x time trying
+
+#visualize help seeking x time trying
+ggplot(BG,mapping =aes(x=HelpSeekingNum_exp,y=TimeTrying))+geom_point(alpha=.6)+geom_smooth(method="lm",se=F,color="darkgray",alpha=.7)+ylab("Time Trying (s)")+xlab("Number of Help Requests")+geom_jitter(width=.05,alpha=.6)
+
+#correlate help seeking x time trying
+cor.test(BG$HelpSeekingNum_exp, BG$TimeTrying)
+
+#help seeking x time trying within conditions
+
+#subset data by condition to examine within condition correlations
+subset(BG, Condition == "Easy") -> BG_Easy
+subset(BG, Condition == "Hard") -> BG_Hard
+subset(BG, Condition == "Impossible") -> BG_Impossible
+
+#run help seeking x time trying correlations
+cor.test(BG_Impossible$HelpSeekingNum_exp,BG_Impossible$TimeTrying)
+cor.test(BG_Easy$HelpSeekingNum_exp,BG_Easy$TimeTrying)
+cor.test(BG_Hard$HelpSeekingNum_exp,BG_Hard$TimeTrying)
+
+#visualize help seeking x time trying broken down by condition
+ggplot(BG,mapping =aes(x=HelpSeekingNum_exp,y=TimeTrying))+geom_point(alpha=.6)+geom_smooth(method="lm",se=F,color="darkgray",alpha=.7)+ylab("Time Trying (s)")+xlab("Number of Help Requests")+geom_jitter(width=.05,alpha=.6)+facet_wrap(~Condition)
+
+#help seeking x force
+
+ggplot(BG,mapping =aes(x=HelpSeekingNum_exp,y=MaxPSI))+geom_point()+geom_smooth(method="lm",se=F,color="gray",alpha=.7)+ylab("Max PSI")+xlab("Number of Help Requests")
+
+cor.test(BG$HelpSeekingNum_exp, BG$MaxPSI)
+
+
+```
+
+######################################################
+#   Section 7 Analyses in supplemental materials   #
+###################################################### 
+
+Planned post-hoc contrasts that are only included in the supplemental materials. 
+```{r supplement-time-trying}
+#time trying post-hoc contrasts
+
+#t-test within conditions
+t.test(timetrying_wide_easy$one, timetrying_wide_easy$three,paired=TRUE,
+       alternative="greater")
+t.test(timetrying_wide_hard$one, timetrying_wide_hard$three,paired=TRUE,
+       alternative="greater")
+t.test(timetrying_wide_impossible$one, timetrying_wide_impossible$three,
+       paired=TRUE,alternative="greater")
+
+cohensD(timetrying_wide_easy$one, timetrying_wide_easy$three,method="paired")
+cohensD(timetrying_wide_hard$one, timetrying_wide_hard$three,method="paired")
+cohensD(timetrying_wide_impossible$one, timetrying_wide_impossible$three,method="paired")
+
+```
+
+
+```{r supplement-force-part1}
+#force gauge post-hoc contrasts
+
+##subset force data data for planned post hoc comparisons
+force_subset <- BG %>% select(SubjNum,TrialNumber,MaxPSI_sqrt,Condition)
+force_wide <- spread(data = force_subset, key = TrialNumber, value = MaxPSI_sqrt) 
+force_wide<- rename(force_wide, "one" = "1")
+force_wide<- rename(force_wide, "two" = "2")
+force_wide<- rename(force_wide, "three" = "3")
+force_wide_easy <- subset(force_wide, Condition=="Easy")
+force_wide_hard <- subset(force_wide, Condition=="Hard")
+force_wide_impossible <- subset(force_wide, Condition=="Impossible")
+
+#t-test within conditions
+t.test(force_wide_hard$one, force_wide_hard$three,paired=TRUE,alternative="less")
+
+cohensD(force_wide_hard$one, force_wide_hard$three,method="paired")
+```
+
+
+```{r supplement-force-part2}
+#contrasts across conditions for PSI within the first trial
+
+#comparing hard vs. easy
+BG_NoImpossible<-subset(BG,!Condition == "Impossible")
+BG_NoImpossible_TrialOne<-subset(BG_NoImpossible,TrialNumber == "1")
+t.test(MaxPSI_sqrt ~ Condition, alternative="greater",data=BG_NoImpossible_TrialOne)
+
+#comparing impossible vs. easy
+BG_NoHard<-subset(BG,!Condition == "Hard")
+BG_NoHard_TrialOne<-subset(BG_NoHard,TrialNumber == "1")
+t.test(MaxPSI_sqrt ~ Condition,alternative="greater", data=BG_NoHard_TrialOne)
+
+#comparing impossible vs. hard
+BG_NoEasy<-subset(BG,!Condition == "Easy")
+BG_NoEasy_TrialOne<-subset(BG_NoEasy,TrialNumber == "1")
+t.test(MaxPSI_sqrt ~ Condition, alternative="greater",data=BG_NoEasy_TrialOne)
+
+```
+
+
+```{r supplement-force-part3}
+#contrasts across conditions for PSI within the final trial
+
+#impossible vs. easy
+BG_NoHard<-subset(BG,!Condition == "Hard")
+BG_NoHard_TrialThree<-subset(BG_NoHard,TrialNumber == "3")
+t.test(MaxPSI_sqrt ~ Condition,alternative="greater", data=BG_NoHard_TrialThree)
+
+#hard vs. easy
+BG_NoImpossible<-subset(BG,!Condition == "Impossible")
+BG_NoImpossible_TrialThree<-subset(BG_NoImpossible,TrialNumber == "3")
+t.test(MaxPSI_sqrt ~ Condition,alternative="greater", data=BG_NoImpossible_TrialThree)
+
+#impossible vs. hard
+BG_NoEasy<-subset(BG,!Condition == "Easy")
+BG_NoEasy_TrialThree<-subset(BG_NoEasy,TrialNumber == "3")
+t.test(MaxPSI_sqrt ~ Condition,alternative="greater", data=BG_NoEasy_TrialThree)
+```
+
+```{r supplement-help seeking}
+#relevel hard for comparisons
+
+BG_Trial1$Condition_HardBase <- factor(BG_Trial1$Condition_HardBase, levels=c("Hard","Easy", "Impossible")) #Hard is baseline
+
+#analyze help seeking with hard as baseline
+lm(HelpSeekingNum_exp_avg~Condition_HardBase,data=BG_Trial1)->HelpSeekingModel
+summary(HelpSeekingModel)
+
+
+```
+
+
+
+
+```{r supplement-affect_negative_part1}
+#affect analyses
+
+#test for simple ME of cond for negative affect within first and final trials
+#    with easy as baseline
+glm(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~Condition,
+    family="binomial",data=BG[BG[,"TrialNumber"]=="1",])->NegAffectFirstTrial
+summary(NegAffectFirstTrial)
+confint(NegAffectFirstTrial)
+
+glm(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~Condition,
+    family="binomial",data=BG[BG[,"TrialNumber"]=="3",])->NegAffectFinalTrial
+summary(NegAffectFinalTrial)
+confint(NegAffectFinalTrial)
+
+#test for simple ME of cond for negative affect within first and final trials
+#    with hard as baseline
+glm(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~Condition_HardBase,
+    family="binomial",data=BG[BG[,"TrialNumber"]=="1",])->NegAffectFirstTrial
+summary(NegAffectFirstTrial)
+confint(NegAffectFirstTrial)
+
+glm(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~Condition_HardBase,
+    family="binomial",data=BG[BG[,"TrialNumber"]=="3",])->NegAffectFinalTrial
+summary(NegAffectFinalTrial)
+confint(NegAffectFinalTrial)
+
+```
+
+
+```{r supplement-affect-negative-part2}
+#Test for precise difference between affect on trials 1 and 3 within each condition
+# for negative affect 
+
+#Easy condition
+glm(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~TrialNumber_AsFactor,family="binomial",
+    data=BG[BG[,"Condition"]=="Easy",])->EasyNegAffectModel_FirstVsFinal
+summary(EasyNegAffectModel_FirstVsFinal)
+confint(EasyNegAffectModel_FirstVsFinal)
+
+#Hard condition
+glm(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~TrialNumber_AsFactor,family="binomial",
+    data=BG[BG[,"Condition"]=="Hard",])->HardNegAffectModel_FirstVsFinal
+summary(HardNegAffectModel_FirstVsFinal)
+confint(HardNegAffectModel_FirstVsFinal)
+
+#Impossible condition
+glm(cbind(TotalNegFrames,NumAffectFrames-TotalNegFrames)~TrialNumber_AsFactor,family="binomial",
+    data=BG[BG[,"Condition"]=="Impossible",])->ImpossibleNegAffectModel_FirstVsFinal
+summary(ImpossibleNegAffectModel_FirstVsFinal)
+confint(ImpossibleNegAffectModel_FirstVsFinal)
+
+```
+
+
+```{r supplement-affect-positive-part1}
+#test for simple ME of cond for Positive affect within first and final trials
+#    with easy as baseline
+glm(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~Condition,
+    family="binomial",data=BG[BG[,"TrialNumber"]=="1",])->PosAffectFirstTrial
+summary(PosAffectFirstTrial)
+confint(PosAffectFirstTrial)
+
+glm(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~Condition,
+    family="binomial",data=BG[BG[,"TrialNumber"]=="3",])->PosAffectFinalTrial
+summary(PosAffectFinalTrial)
+confint(PosAffectFinalTrial)
+
+#test for simple ME of cond for Positive affect within first and final trials
+#    with hard as baseline
+#first trial
+glm(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~Condition_HardBase,
+    family="binomial", data=BG[BG[,"TrialNumber"]=="1",])->PosAffectFirstTrial
+summary(PosAffectFirstTrial)
+confint(PosAffectFirstTrial)
+
+#final trial
+glm(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~Condition_HardBase,
+    family="binomial",data=BG[BG[,"TrialNumber"]=="3",])->PosAffectFinalTrial
+summary(PosAffectFinalTrial)
+confint(PosAffectFinalTrial)
+
+```
+
+
+```{r supplement-affect-positive-part2}
+#Test for precise differences between affect on trials 1 and 3 within each condition
+# for positive affect 
+
+#Easy
+glm(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~TrialNumber_AsFactor,
+    family="binomial",data=BG[BG[,"Condition"]=="Easy",])->EasyPosAffectModel_FirstVsFinal
+summary(EasyPosAffectModel_FirstVsFinal)
+confint(EasyPosAffectModel_FirstVsFinal)
+
+#Hard
+glm(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~TrialNumber_AsFactor,
+    family="binomial",data=BG[BG[,"Condition"]=="Hard",])->HardPosAffectModel_FirstVsFinal
+summary(HardPosAffectModel_FirstVsFinal)
+confint(HardPosAffectModel_FirstVsFinal)
+
+#Impossible
+glm(cbind(TotalPosFrames,NumAffectFrames-TotalPosFrames)~TrialNumber_AsFactor,family="binomial",
+    data=BG[BG[,"Condition"]=="Impossible",])->ImpossiblePosAffectModel_FirstVsFinal
+summary(ImpossiblePosAffectModel_FirstVsFinal)
+confint(ImpossiblePosAffectModel_FirstVsFinal)
+```
+
