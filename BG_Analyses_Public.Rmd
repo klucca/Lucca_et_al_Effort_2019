@@ -1,10 +1,7 @@
 ---
-title: Infants rationally decide when and how to deploy effort - Analyses
-Project: NHB article "Analyses in manuscript: Infants rationally decide when and how to deploy effort"
-Authors: Kelsey Lucca, Rachel O. Horton, Jessica A. Sommerville
-output:
-  pdf_document: default
-  html_document: default
+Title: "Infants rationally decide when and how to deploy effort - Analyses"
+Authors: "Kelsey Lucca, Rachel O. Horton, Jessica A. Sommerville"
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
@@ -534,29 +531,11 @@ anova(m0,HintModel,test="Chisq")
 
 
 ######################################################
-#   Section 6 correlations across DVs   #
+#   Section 6 correlations between time trying and help-seeking   #
 ###################################################### 
 
 
-```{r correlations across dvs}
-
-#neg affect x time trying
-
-#visualize
-ggplot(BG,mapping =aes(x=TotalNegFrames/NumAffectFrames,y=TimeTrying))+geom_point()+geom_smooth(method="lm",se=F,color="gray",alpha=.7)+ylab("Time Trying (s)")+xlab("Proportion Negative Affect")
-
-#create new neg affect variable to correlate with time trying
-mutate(BG, PropNegAffect = TotalNegFrames/NumAffectFrames)->BG
-cor.test(BG$PropNegAffect,BG$TimeTrying)
-
-#pos affect x time trying
-
-#visualize
-ggplot(BG,mapping =aes(x=TotalPosFrames/NumAffectFrames,y=TimeTrying))+geom_point()+geom_smooth(method="lm",se=F,color="gray",alpha=.7)+ylab("Time Trying (s)")+xlab("Proportion Positive Affect")
-
-#create new pos affect variable to correlate with time trying
-mutate(BG, PropPosAffect = TotalPosFrames/NumAffectFrames)->BG
-cor.test(BG$PropPosAffect,BG$TimeTrying)
+```{r correlation between time trying and help-seeking}
 
 #help seeking x time trying
 
@@ -580,12 +559,6 @@ cor.test(BG_Hard$HelpSeekingNum_exp,BG_Hard$TimeTrying)
 
 #visualize help seeking x time trying broken down by condition
 ggplot(BG,mapping =aes(x=HelpSeekingNum_exp,y=TimeTrying))+geom_point(alpha=.6)+geom_smooth(method="lm",se=F,color="darkgray",alpha=.7)+ylab("Time Trying (s)")+xlab("Number of Help Requests")+geom_jitter(width=.05,alpha=.6)+facet_wrap(~Condition)
-
-#help seeking x force
-
-ggplot(BG,mapping =aes(x=HelpSeekingNum_exp,y=MaxPSI))+geom_point()+geom_smooth(method="lm",se=F,color="gray",alpha=.7)+ylab("Max PSI")+xlab("Number of Help Requests")
-
-cor.test(BG$HelpSeekingNum_exp, BG$MaxPSI)
 
 
 ```
